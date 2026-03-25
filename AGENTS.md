@@ -9,7 +9,7 @@
 - **框架**: UE4SS (Unreal Engine Scripting System)
 - **语言**: Lua 5.4
 - **目标游戏**: Grind Survivors (UE5)
-- **依赖**: UE4SS 内置库 (`UEHelpers`)
+- **依赖**: 无外部依赖（纯 UE4SS API）
 
 ## 核心架构
 
@@ -25,10 +25,23 @@
 ### 数据流
 
 ```
-PlayerGainXP_Event → 累积经验值 → GiveBonusXP() → 计算增幅 → LevelComponent.AccumulatedXpOnCurrentLevel
-                                      ↑
-                              PickupRange ← UStatSystem:GetStatValueByTag()
+OnPlayerGainXP_Event → accumulatedBaseXP += xp
+                              ↓
+                       LoopAsync(500ms) → GiveBonusXP()
+                              ↓
+                       计算增幅 → LevelComponent.AccumulatedXpOnCurrentLevel += bonusXP
+                              ↑
+                       currentPickupRange ← 两个来源：
+                         1. HandlePickupRangeChanged_ 事件（实时）
+                         2. UpdatePickupRange() → StatSystem:GetStatValueByTag()（初始化时）
 ```
+
+### 运行机制
+
+- **XP 累积**: `OnPlayerGainXP_Event` 触发时仅累积到 `accumulatedBaseXP`，不立即计算
+- **批量处理**: `LoopAsync` 每 500ms 执行一次 `GiveBonusXP()`，批量处理累积的 XP
+- **关卡重置**: `OnGameLevelStarted` 时重置 `levelComponent`（防止残留失效引用）并重新初始化
+- **双通道同步**: PickupRange 值通过事件实时更新 + 初始化时主动查询，确保不遗漏
 
 ## 关键 API 用法
 

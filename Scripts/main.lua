@@ -1,7 +1,5 @@
-local UEHelpers = require("UEHelpers")
-
 local BASE_PICKUP_RANGE = 360
-local DEBUG_MODE = true
+local DEBUG_MODE = false
 local currentPickupRange = BASE_PICKUP_RANGE
 local statSystem = nil
 local levelComponent = nil
@@ -98,11 +96,6 @@ local function GiveBonusXP()
         return
     end
     
-    if not levelComponent or not levelComponent:IsValid() then
-        DebugLog("LevelComponent invalid, cannot add bonus XP")
-        return
-    end
-    
     local currentXP = levelComponent.AccumulatedXpOnCurrentLevel
     if type(currentXP) == "number" then
         local newXP = currentXP + bonusXP
@@ -114,16 +107,17 @@ end
 
 RegisterCustomEvent("OnGameLevelStarted", function(ContextParam)
     Log("Game level started")
+    levelComponent = nil
     InitializeStatSystem()
-    FindPickupRangeTag()
     UpdatePickupRange()
 end)
 
 RegisterCustomEvent("HandlePickupRangeChanged_", function(ContextParam, StatTag, PrevValue, NewValue)
     local prevVal = PrevValue:get()
     local newVal = NewValue:get()
-    Log(string.format("[HandlePickupRangeChanged_] Prev: %.2f | New: %.2f", prevVal, newVal))
-    if newVal and newVal > 0 then
+    if type(prevVal) ~= "number" or type(newVal) ~= "number" then return end
+    DebugLog(string.format("PickupRange changed: %.2f -> %.2f", prevVal, newVal))
+    if newVal > 0 then
         currentPickupRange = newVal
     end
 end)
