@@ -148,7 +148,11 @@ DebugLog("消息")   -- 仅在 DEBUG_MODE=true 时输出
 
 ## 代码规范
 
-1. **错误处理**: 使用 `pcall` 包装所有 UE 对象访问
+1. **错误处理 (`pcall` 使用原则)**:
+   - **不要**用 `pcall` 包装普通的 UE 对象属性访问和方法调用——用 `nil` 检查 + `IsValid()` 即可
+   - **仅在循环/定时器边界**使用 `pcall`：如 `LoopAsync`、`ExecuteWithDelay` 等回调入口，防止未捕获异常杀死整个循环
+   - `pcall` 捕获的错误**必须记录日志**，禁止静默吞掉：`local ok, err = pcall(fn); if not ok then Log(err) end`
+   - 判断标准：「如果这里抛异常，是否会导致不可恢复的后果（如定时器停止）？」——是则 `pcall`，否则让错误自然暴露
 2. **空值检查**: 在使用对象前调用 `IsValid()` 验证
 3. **类型检查**: 使用 `type(value) == "number"` 确认返回类型
 4. **日志前缀**: 所有日志使用 `[PickupRangeXpBoost]` 前缀

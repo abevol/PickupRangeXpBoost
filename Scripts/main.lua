@@ -17,10 +17,8 @@ local function DebugLog(message)
 end
 
 local function InitializeStatSystem()
-    local success, sys = pcall(function()
-        return FindFirstOf("StatSystem")
-    end)
-    if success and sys and sys:IsValid() then
+    local sys = FindFirstOf("StatSystem")
+    if sys and sys:IsValid() then
         statSystem = sys
         DebugLog("StatSystem initialized")
         return true
@@ -34,10 +32,8 @@ local function FindLevelComponent()
     
     local playerChar = FindFirstOf("BP_PlayerCharacter_C")
     if playerChar and playerChar:IsValid() then
-        local success, lc = pcall(function()
-            return playerChar.LevelComponent
-        end)
-        if success and lc and lc:IsValid() then
+        local lc = playerChar.LevelComponent
+        if lc and lc:IsValid() then
             levelComponent = lc
             DebugLog("LevelComponent found")
             return true
@@ -50,25 +46,16 @@ local function FindPickupRangeTag()
     if pickupRangeTag then return true end
     if not statSystem or not statSystem:IsValid() then return false end
     
-    local success, stats = pcall(function()
-        return statSystem.Stats
-    end)
-    
-    if not success or not stats then return false end
+    local stats = statSystem.Stats
+    if not stats then return false end
     
     for i = 1, #stats do
         local stat = stats[i]
         if stat and stat:IsValid() then
-            local tagSuccess, tag = pcall(function()
-                return stat.Tag
-            end)
-            
-            if tagSuccess and tag then
-                local nameSuccess, tagName = pcall(function()
-                    return tag.TagName:ToString()
-                end)
-                
-                if nameSuccess and tagName and tagName == "Stat.PickupRange" then
+            local tag = stat.Tag
+            if tag then
+                local tagName = tag.TagName:ToString()
+                if tagName == "Stat.PickupRange" then
                     pickupRangeTag = tag
                     Log("Found PickupRange tag")
                     return true
@@ -84,11 +71,8 @@ local function UpdatePickupRange()
     if not statSystem or not statSystem:IsValid() then return end
     if not FindPickupRangeTag() then return end
     
-    local success, value = pcall(function()
-        return statSystem:GetStatValueByTag(pickupRangeTag)
-    end)
-    
-    if success and type(value) == "number" and value > 0 then
+    local value = statSystem:GetStatValueByTag(pickupRangeTag)
+    if type(value) == "number" and value > 0 then
         if value ~= currentPickupRange then
             DebugLog(string.format("PickupRange: %.2f -> %.2f", currentPickupRange, value))
             currentPickupRange = value
@@ -119,15 +103,10 @@ local function GiveBonusXP()
         return
     end
     
-    local success, currentXP = pcall(function()
-        return levelComponent.AccumulatedXpOnCurrentLevel
-    end)
-    
-    if success and type(currentXP) == "number" then
+    local currentXP = levelComponent.AccumulatedXpOnCurrentLevel
+    if type(currentXP) == "number" then
         local newXP = currentXP + bonusXP
-        pcall(function()
-            levelComponent.AccumulatedXpOnCurrentLevel = newXP
-        end)
+        levelComponent.AccumulatedXpOnCurrentLevel = newXP
         Log(string.format("Base: %d | Range: %.2f | Multiplier: %.2fx | Bonus: %d | Total: %d", 
             baseXP, currentPickupRange, multiplier, bonusXP, newXP))
     end
@@ -160,7 +139,10 @@ ExecuteInGameThread(function()
 end)
 
 LoopAsync(500, function()
-    GiveBonusXP()
+    local success, err = pcall(GiveBonusXP)
+    if not success then
+        Log(string.format("GiveBonusXP error: %s", tostring(err)))
+    end
     return false
 end)
 
