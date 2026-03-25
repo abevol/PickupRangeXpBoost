@@ -1,0 +1,171 @@
+# AGENTS.md - PickupRangeXpBoost
+
+## 项目概述
+
+这是一个基于 UE4SS 的 Lua 模组，为 UE5 游戏 "Grind Survivors" 实现经验值增益功能。模组根据玩家角色的 `Stat.PickupRange` 属性值相对于基础值的增幅，按比例增加获取的经验值。
+
+## 技术栈
+
+- **框架**: UE4SS (Unreal Engine Scripting System)
+- **语言**: Lua 5.4
+- **目标游戏**: Grind Survivors (UE5)
+- **依赖**: UE4SS 内置库 (`UEHelpers`)
+
+## 核心架构
+
+### 关键组件
+
+| 组件 | 类型 | 用途 |
+|------|------|------|
+| `UStatSystem` | `UGameInstanceSubsystem` | 游戏属性系统，管理所有 Stat |
+| `ULevelComponent` | `UActorComponent` | 角色等级组件，存储经验值 |
+| `FGameplayTag` | 结构体 | UE GameplayTag 系统的标签 |
+| `UGameplayStat` | `UObject` | 单个属性的数据容器 |
+
+### 数据流
+
+```
+PlayerGainXP_Event → 累积经验值 → GiveBonusXP() → 计算增幅 → LevelComponent.AccumulatedXpOnCurrentLevel
+                                      ↑
+                              PickupRange ← UStatSystem:GetStatValueByTag()
+```
+
+## 关键 API 用法
+
+### 1. 获取 StatSystem 实例
+
+```lua
+local statSystem = FindFirstOf("StatSystem")
+```
+
+- `StatSystem` 是 `UGameInstanceSubsystem`，游戏启动后自动存在
+- 使用 `FindFirstOf` 按类名查找实例
+
+### 2. 遍历 Stats 数组获取 FGameplayTag
+
+```lua
+local stats = statSystem.Stats  -- TArray<UGameplayStat>
+for i = 1, #stats do
+    local stat = stats[i]
+    local tag = stat.Tag  -- FGameplayTag
+    local tagName = tag.TagName:ToString()  -- "Stat.PickupRange"
+end
+```
+
+**重要**: `FGameplayTag` 必须从现有对象获取，无法通过字符串直接创建。这是 UE4SS 的限制。
+
+### 3. 获取属性值
+
+```lua
+local value = statSystem:GetStatValueByTag(pickupRangeTag)
+```
+
+- 参数必须是 `FGameplayTag` 类型，不能是 `FName` 或字符串
+- 返回值是 `float`
+
+### 4. 修改经验值
+
+```lua
+levelComponent.AccumulatedXpOnCurrentLevel = newXP
+```
+
+- 直接赋值即可修改
+- 需要先获取 `LevelComponent` 实例
+
+## UE4SS 事件系统
+
+### RegisterCustomEvent
+
+注册蓝图自定义事件的回调：
+
+```lua
+RegisterCustomEvent("事件名", function(ContextParam, 参数1, 参数2, ...)
+    -- 参数使用 :get() 获取实际值
+    local actualValue = 参数1:get()
+end)
+```
+
+### 常用事件
+
+| 事件 | 来源 | 参数 |
+|------|------|------|
+| `OnGameLevelStarted` | `AGSGameMode` | 无 |
+| `HandlePickupRangeChanged_` | `BP_PlayerCharacterEffects_C` | StatTag, PrevValue, NewValue |
+| `OnPlayerGainXP_Event` | `BP_PlayerCharacterEffects_C` | XPAmount |
+
+## 修改指南
+
+### 添加新属性增益
+
+1. 修改 `FindPickupRangeTag()` 中的标签名称
+2. 更新 `BASE_PICKUP_RANGE` 常量
+3. 调整 `GiveBonusXP()` 中的增幅公式
+
+### 修改增幅公式
+
+当前公式位于 `GiveBonusXP()`:
+
+```lua
+local multiplier = (currentPickupRange - BASE_PICKUP_RANGE) / BASE_PICKUP_RANGE
+local bonusXP = math.floor(baseXP * multiplier + 0.5)
+```
+
+### 添加新的事件监听
+
+```lua
+RegisterCustomEvent("新事件名", function(ContextParam, ...)
+    -- 处理逻辑
+end)
+```
+
+## 调试方法
+
+### 1. 控制台命令
+
+| 命令 | 功能 |
+|------|------|
+| `xpboost_status` | 查看当前状态 |
+| `xpboost_debug` | 开关调试日志 |
+| `xpboost_set <值>` | 手动设置 PickupRange |
+| `xpboost_test <数量>` | 添加测试经验值 |
+
+### 2. 日志系统
+
+```lua
+Log("消息")        -- 始终输出
+DebugLog("消息")   -- 仅在 DEBUG_MODE=true 时输出
+```
+
+日志格式: `[PickupRangeXpBoost] 消息`
+
+### 3. 常见问题排查
+
+| 问题 | 排查方法 |
+|------|----------|
+| 属性值为 0 | 检查 `pickupRangeTag` 是否正确获取 |
+| 经验值未增加 | 检查 `levelComponent` 是否有效 |
+| 事件未触发 | 确认事件名称拼写正确 |
+
+## 代码规范
+
+1. **错误处理**: 使用 `pcall` 包装所有 UE 对象访问
+2. **空值检查**: 在使用对象前调用 `IsValid()` 验证
+3. **类型检查**: 使用 `type(value) == "number"` 确认返回类型
+4. **日志前缀**: 所有日志使用 `[PickupRangeXpBoost]` 前缀
+
+## 文件结构
+
+```
+PickupRangeXpBoost/
+├── AGENTS.md           # 本文档
+├── README.md           # 用户文档
+├── Scripts/
+│   └── main.lua        # 主脚本
+└── .git/               # Git 仓库
+```
+
+## 参考资源
+
+- UE4SS 文档: https://docs.ue4ss.com/
+- UE5 GameplayTag 文档: https://docs.unrealengine.com/5.0/en-US/gameplay-tags-in-unreal-engine/
+- GrindSurvivors 类型定义: `Mods/shared/types/GrindSurvivors.lua`

@@ -133,7 +133,7 @@ local function GiveBonusXP()
     end
 end
 
-RegisterCustomEvent("AGSGameMode:OnGameLevelStarted", function(ContextParam)
+RegisterCustomEvent("OnGameLevelStarted", function(ContextParam)
     Log("Game level started")
     InitializeStatSystem()
     FindPickupRangeTag()
