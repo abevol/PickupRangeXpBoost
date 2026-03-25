@@ -133,6 +133,13 @@ local function GiveBonusXP()
     end
 end
 
+RegisterCustomEvent("AGSGameMode:OnGameLevelStarted", function(ContextParam)
+    Log("Game level started")
+    InitializeStatSystem()
+    FindPickupRangeTag()
+    UpdatePickupRange()
+end)
+
 RegisterCustomEvent("HandlePickupRangeChanged_", function(ContextParam, StatTag, PrevValue, NewValue)
     local prevVal = PrevValue:get()
     local newVal = NewValue:get()
@@ -150,9 +157,6 @@ end)
 
 ExecuteInGameThread(function()
     Log(string.format("Mod loaded - Base PickupRange: %.1f", BASE_PICKUP_RANGE))
-    InitializeStatSystem()
-    FindPickupRangeTag()
-    UpdatePickupRange()
 end)
 
 LoopAsync(500, function()
