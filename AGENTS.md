@@ -9,7 +9,7 @@
 - **框架**: UE4SS (Unreal Engine Scripting System)
 - **语言**: Lua 5.4
 - **目标游戏**: Grind Survivors (UE5)
-- **依赖**: 无外部依赖（纯 UE4SS API）
+- **依赖**: UEHelpers（UE4SS 内置模块）
 
 ## 核心架构
 
@@ -21,6 +21,8 @@
 | `ULevelComponent` | `UActorComponent` | 角色等级组件，存储经验值 |
 | `FGameplayTag` | 结构体 | UE GameplayTag 系统的标签 |
 | `UGameplayStat` | `UObject` | 单个属性的数据容器 |
+| `UUserWidget` | UMG Widget | XP 增益显示的根容器 |
+| `UTextBlock` | UMG Widget | 显示增益百分比和额外经验值的文本 |
 
 ### 数据流
 
@@ -42,6 +44,7 @@ OnPlayerGainXP_Event → accumulatedBaseXP += xp
 - **批量处理**: `LoopAsync` 每 500ms 执行一次 `GiveBonusXP()`，批量处理累积的 XP
 - **关卡重置**: `OnGameLevelStarted` 时重置 `levelComponent`（防止残留失效引用）并重新初始化
 - **双通道同步**: PickupRange 值通过事件实时更新 + 初始化时主动查询，确保不遗漏
+- **HUD 显示**: `OnGameLevelStarted` 延迟 2s 后通过 `StaticConstructObject` 创建 UMG widget 链（UserWidget → WidgetTree → CanvasPanel → Border → TextBlock），锚定在屏幕顶部居中偏下（Y=55），每次 `GiveBonusXP` 或 `HandlePickupRangeChanged_` 后实时更新文本和颜色
 
 ## 关键 API 用法
 
@@ -141,6 +144,7 @@ end)
 | `xpboost_debug` | 开关调试日志 |
 | `xpboost_set <值>` | 手动设置 PickupRange |
 | `xpboost_test <数量>` | 添加测试经验值 |
+| `xpboost_ui` | 开关 HUD 增益显示 |
 
 ### 2. 日志系统
 
@@ -158,17 +162,19 @@ DebugLog("消息")   -- 仅在 DEBUG_MODE=true 时输出
 | 属性值为 0 | 检查 `pickupRangeTag` 是否正确获取 |
 | 经验值未增加 | 检查 `levelComponent` 是否有效 |
 | 事件未触发 | 确认事件名称拼写正确 |
+| HUD 不显示 | 检查 `xpBoostWidget` 是否创建成功，确认 `uiEnabled` 为 true |
 
 ## 代码规范
 
 1. **错误处理 (`pcall` 使用原则)**:
    - **不要**用 `pcall` 包装普通的 UE 对象属性访问和方法调用——用 `nil` 检查 + `IsValid()` 即可
-   - **仅在循环/定时器边界**使用 `pcall`：如 `LoopAsync`、`ExecuteWithDelay` 等回调入口，防止未捕获异常杀死整个循环
+   - **仅在调度边界**使用 `pcall`：如 `LoopAsync`、`ExecuteWithDelay`、`ExecuteInGameThread` 等回调入口，防止未捕获异常杀死循环或破坏线程状态
    - `pcall` 捕获的错误**必须记录日志**，禁止静默吞掉：`local ok, err = pcall(fn); if not ok then Log(err) end`
    - 判断标准：「如果这里抛异常，是否会导致不可恢复的后果（如定时器停止）？」——是则 `pcall`，否则让错误自然暴露
 2. **空值检查**: 在使用对象前调用 `IsValid()` 验证
 3. **类型检查**: 使用 `type(value) == "number"` 确认返回类型
 4. **日志前缀**: 所有日志使用 `[PickupRangeXpBoost]` 前缀
+5. **关卡切换状态重置 (`ResetLevelState`)**: 在关卡切换时，上一关卡的 UE 对象或结构体可能会被垃圾回收 (GC)。任何未清除的缓存引用都会变成悬空指针。**规则**：每个持有 UE 对象、结构体或从中派生值的变量，**必须**在关卡切换时（`ResetLevelState()` 函数中）被重置为 `nil` 或初始值。新增的缓存引用也必须添加到该重置列表中。
 
 ## 文件结构
 
