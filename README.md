@@ -4,6 +4,8 @@
 
 This is a UE4SS-based Lua mod that implements an experience point (XP) boost feature for the UE5 game "Grind Survivors". The mod proportionally increases the XP gained based on the player character's pickup range attribute multiplier.
 
+<video src="https://github.com/user-attachments/assets/6aa82a44-e04b-452c-ab9b-fd984371efcb" controls="controls" width="100%" autoplay="autoplay" muted="muted" loop="loop"></video>
+
 ## Installation
 
 1. Ensure [UE4SS](https://docs.ue4ss.com/) is installed.

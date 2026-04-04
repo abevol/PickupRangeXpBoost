@@ -4,6 +4,8 @@
 
 这是一个基于 UE4SS 的 Lua 模组，为 UE5 游戏《无尽猎杀》（Grind Survivors）实现经验值增益功能。模组根据玩家角色的拾取范围属性增幅，等比增加获取的经验值。
 
+<video src="https://github.com/user-attachments/assets/6aa82a44-e04b-452c-ab9b-fd984371efcb" controls="controls" width="100%" autoplay="autoplay" muted="muted" loop="loop"></video>
+
 ## 安装
 
 1. 确保已安装 [UE4SS](https://docs.ue4ss.com/)
