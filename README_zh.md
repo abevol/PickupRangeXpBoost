@@ -8,9 +8,28 @@
 
 ## 安装
 
-1. 确保已安装 [UE4SS](https://docs.ue4ss.com/)
-2. 将 `PickupRangeXpBoost` 文件夹复制到 `GrindSurvivors/Binaries/Win64/ue4ss/Mods/` 目录下
-3. 启动游戏，模组自动生效
+### 自动安装（推荐）
+
+1. 下载模组的 [最新源码](https://github.com/abevol/PickupRangeXpBoost/archive/refs/heads/master.zip) 并解压。
+2. 双击模组文件夹中的 `install.cmd`。
+3. 按照提示选择你的游戏目录（通常为 `Grind Survivors/GrindSurvivors/Binaries/Win64/`）。
+4. 脚本将自动下载并安装 **UE4SS 模组框架** 并配置好本模组。
+
+### 手动安装
+
+1. 确保已安装 [UE4SS](https://api.github.com/repos/UE4SS-RE/RE-UE4SS/releases/tags/experimental-latest) (**experimental-latest** 版本)。
+2. 将 `PickupRangeXpBoost` 文件夹复制到 `Grind Survivors/GrindSurvivors/Binaries/Win64/ue4ss/Mods/` 目录下。
+3. 在 `Grind Survivors/GrindSurvivors/Binaries/Win64/ue4ss/Mods/mods.txt` 文件中添加以下一行内容：
+   ```text
+   PickupRangeXpBoost : 1
+   ```
+4. 启动游戏。
+
+## 验证安装
+
+安装完成后，你可以按照以下步骤验证：
+1. 启动游戏并进入任一关卡。
+2. 观察屏幕顶部，经验条中间位置若出现增益标签（如 "EXP + 70% (+3)"），则说明模组已成功生效。
 
 ## 功能说明
 

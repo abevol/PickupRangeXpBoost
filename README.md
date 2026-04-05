@@ -8,9 +8,28 @@ This is a UE4SS-based Lua mod that implements an experience point (XP) boost fea
 
 ## Installation
 
-1. Ensure [UE4SS](https://docs.ue4ss.com/) is installed.
-2. Copy the `PickupRangeXpBoost` folder to the `GrindSurvivors/Binaries/Win64/ue4ss/Mods/` directory.
-3. Launch the game, and the mod will take effect automatically.
+### Automatic Installation (Recommended)
+
+1. Download the [latest source code](https://github.com/abevol/PickupRangeXpBoost/archive/refs/heads/master.zip) of this mod and extract it.
+2. Double-click `install.cmd` in the mod folder.
+3. Follow the prompts to select your game directory (usually `Grind Survivors/GrindSurvivors/Binaries/Win64/`).
+4. The script will automatically download and install the **UE4SS mod framework** and configure the mod.
+
+### Manual Installation
+
+1. Ensure [UE4SS](https://api.github.com/repos/UE4SS-RE/RE-UE4SS/releases/tags/experimental-latest) (**experimental-latest** version) is installed.
+2. Copy the `PickupRangeXpBoost` folder to the `Grind Survivors/GrindSurvivors/Binaries/Win64/ue4ss/Mods/` directory.
+3. Open the `Grind Survivors/GrindSurvivors/Binaries/Win64/ue4ss/Mods/mods.txt` file and add the following line to register the mod:
+   ```text
+   PickupRangeXpBoost : 1
+   ```
+4. Launch the game.
+
+## Verification
+
+To verify the installation:
+1. Launch the game and start any level.
+2. Check the top of the screen. If you see a label like **"EXP + 70% (+3)"** over the XP bar, the mod is active and working correctly.
 
 ## Features
 
