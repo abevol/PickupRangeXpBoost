@@ -43,6 +43,7 @@ $script:Msg = @{
     'UserCancelled'          = @{ 'en' = 'Operation cancelled by user.'; 'zh' = '用户取消了操作。' }
     'InvalidExe'             = @{ 'en' = 'The selected file is not GrindSurvivors-Win64-Shipping.exe.'; 'zh' = '选择的文件不是 GrindSurvivors-Win64-Shipping.exe。' }
     'Downloading'            = @{ 'en' = 'Downloading'; 'zh' = '正在下载' }
+    'DownloadingFile'        = @{ 'en' = 'Downloading file...'; 'zh' = '正在下载文件...' }
     'DownloadProgress'       = @{ 'en' = '{0:F1} MB / {1:F1} MB ({2}%)'; 'zh' = '{0:F1} MB / {1:F1} MB ({2}%)' }
     'DownloadComplete'       = @{ 'en' = 'Download complete: {0}'; 'zh' = '下载完成：{0}' }
     'DownloadFailed'         = @{ 'en' = 'Download failed: {0}'; 'zh' = '下载失败：{0}' }
@@ -53,7 +54,7 @@ $script:Msg = @{
     'VerifyingFile'          = @{ 'en' = 'Verifying file integrity...'; 'zh' = '正在验证文件完整性...' }
     'VerifyFailed'           = @{ 'en' = 'File integrity verification failed. Expected: {0}, Got: {1}'; 'zh' = '文件完整性验证失败。预期：{0}，实际：{1}' }
     'VerifyPassed'           = @{ 'en' = 'File integrity verification passed.'; 'zh' = '文件完整性验证通过。' }
-    'UE4SSAlreadyInstalled'  = @{ 'en' = 'UE4SS is already installed. Reinstall/Update? [Y/N]'; 'zh' = 'UE4SS 已安装。是否重新安装/更新？[Y/N]' }
+    'UE4SSAlreadyInstalled'  = @{ 'en' = 'UE4SS is already installed. Reinstall/Update? [Y/n]'; 'zh' = 'UE4SS 已安装。是否重新安装/更新？[Y/n]' }
     'UE4SSSkipped'           = @{ 'en' = 'Skipped UE4SS installation.'; 'zh' = '已跳过 UE4SS 安装。' }
     'BackingUpConfig'        = @{ 'en' = 'Backing up existing configuration...'; 'zh' = '正在备份现有配置...' }
     'RestoringConfig'        = @{ 'en' = 'Restoring configuration...'; 'zh' = '正在恢复配置...' }
@@ -214,6 +215,7 @@ function Download-FileWithProgress {
         } else {
             Write-Host ("  " + (Get-Msg 'TryingDirectSource')) -ForegroundColor DarkGray
         }
+        Write-Host ("  " + (Get-Msg 'DownloadingFile')) -ForegroundColor DarkGray
 
         try {
             Invoke-DownloadWithProgress -Url $actualUrl -OutputPath $OutputPath -ActivityName $fileName
@@ -527,7 +529,7 @@ try {
     $skipUE4SS = $false
     if ($ue4ssInstalled) {
         $answer = Read-Host (Get-Msg 'UE4SSAlreadyInstalled')
-        if ($answer -notmatch '^[Yy]') {
+        if ($answer -match '^[Nn]') {
             Write-Host (Get-Msg 'UE4SSSkipped') -ForegroundColor DarkYellow
             $skipUE4SS = $true
         }
