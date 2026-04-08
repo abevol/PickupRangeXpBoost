@@ -2,7 +2,7 @@
 
 # PickupRangeXpBoost
 
-This is a UE4SS-based Lua mod that implements an experience point (XP) boost feature for the UE5 game "Grind Survivors". The mod proportionally increases the XP gained based on the player character's pickup range attribute multiplier.
+This is a UE4SS-based Lua mod that implements an experience point (XP) boost feature for the UE5 game "Grind Survivors". The mod increases XP gained based on the player character's pickup range attribute multiplier, with a configurable conversion ratio.
 
 <video src="https://github.com/user-attachments/assets/6aa82a44-e04b-452c-ab9b-fd984371efcb" controls="controls" width="100%" autoplay="autoplay" muted="muted" loop="loop"></video>
 
@@ -33,19 +33,24 @@ To verify the installation:
 
 ## Features
 
-- Increases XP proportionally based on the current `Stat.PickupRange` relative to the base value (360).
-- Formula: `Bonus XP = Base XP × (Current Stat.PickupRange - 360) / 360`
+- Converts the current `Stat.PickupRange` boost relative to the base value (360) into bonus XP using a configurable ratio.
+- Formula: `Bonus XP = Base XP × (Current Stat.PickupRange - 360) / 360 × XP_CONVERSION_RATE`
+- Default conversion ratio: `XP_CONVERSION_RATE = 1.0`
 - Calculates and grants bonus XP in batches every 500ms.
 - Displays the current boost percentage and bonus XP in real-time at the top of the screen, with colors changing according to the boost level.
 
 ## Boost Examples
 
-| PickupRange | Boost | Bonus XP when gaining 10 XP |
-|-------------|-------|-----------------------------|
+Examples below use the default `XP_CONVERSION_RATE = 1.0`.
+
+| PickupRange | XP Bonus | Bonus XP when gaining 10 XP |
+|-------------|----------|-----------------------------|
 | 360 | 0% | 0 |
 | 540 | 50% | 5 |
 | 720 | 100% | 10 |
 | 1080 | 200% | 20 |
+
+If you set `XP_CONVERSION_RATE` to `0.5`, the same values become 0, 2.5, 5, and 10 bonus XP respectively. If you set it to `2.0`, they become 0, 10, 20, and 40.
 
 ## Console Commands
 
@@ -53,8 +58,9 @@ Enter the following commands in the UE4SS console:
 
 | Command | Description |
 |---------|-------------|
-| `xpboost_status` | View current status (PickupRange, boost percentage, pending XP) |
+| `xpboost_status` | View current status (PickupRange, range boost, XP ratio, XP bonus, pending XP) |
 | `xpboost_debug` | Toggle debug logging |
+| `xpboost_ratio <value>` | Set the XP conversion ratio (`0` disables bonus XP, `1` keeps the original behavior) |
 | `xpboost_set <value>` | Manually set PickupRange (for testing) |
 | `xpboost_test <amount>` | Manually add XP to the pending queue (default 10) |
 | `xpboost_ui` | Toggle on-screen boost display |
@@ -72,4 +78,5 @@ Modify the constants at the top of `Scripts/main.lua`:
 | Parameter | Default Value | Description |
 |-----------|---------------|-------------|
 | `BASE_PICKUP_RANGE` | 360 | Base PickupRange value; values below this will not generate a bonus. |
+| `XP_CONVERSION_RATE` | 1.0 | Converts pickup range boost into XP bonus; can also be changed in-game with `xpboost_ratio`. |
 | `DEBUG_MODE` | false | Debug log toggle, can also be switched via the `xpboost_debug` command. |

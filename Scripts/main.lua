@@ -1,6 +1,7 @@
 local UEHelpers = require("UEHelpers")
 
 local BASE_PICKUP_RANGE = 360
+local XP_CONVERSION_RATE = 1.0
 local DEBUG_MODE = false
 local currentPickupRange = BASE_PICKUP_RANGE
 local statSystem = nil
@@ -26,6 +27,21 @@ end
 
 local function FLinearColor(r, g, b, a) return { R = r, G = g, B = b, A = a } end
 local function FSlateColor(r, g, b, a) return { SpecifiedColor = FLinearColor(r, g, b, a), ColorUseRule = 0 } end
+
+local function GetPickupRangeBoostMultiplier()
+    if currentPickupRange <= BASE_PICKUP_RANGE then
+        return 0
+    end
+    return (currentPickupRange - BASE_PICKUP_RANGE) / BASE_PICKUP_RANGE
+end
+
+local function GetXpBonusMultiplier()
+    return GetPickupRangeBoostMultiplier() * XP_CONVERSION_RATE
+end
+
+local function GetXpBonusPercent()
+    return math.floor(GetXpBonusMultiplier() * 100 + 0.5)
+end
 
 local function FindExperienceMeter()
     local all = FindAllOf("WBP_ExperienceMeter_C")
@@ -62,10 +78,7 @@ end
 local function UpdateXpBoostDisplay()
     if not xpBoostTextBlock or not xpBoostTextBlock:IsValid() then return end
 
-    local bonusPercent = 0
-    if currentPickupRange > BASE_PICKUP_RANGE then
-        bonusPercent = math.floor((currentPickupRange - BASE_PICKUP_RANGE) / BASE_PICKUP_RANGE * 100 + 0.5)
-    end
+    local bonusPercent = GetXpBonusPercent()
 
     local text
     if lastBonusXP > 0 then
@@ -210,9 +223,9 @@ local function GiveBonusXP()
     local baseXP = accumulatedBaseXP
     accumulatedBaseXP = 0
     
-    if currentPickupRange <= BASE_PICKUP_RANGE then return end
+    local multiplier = GetXpBonusMultiplier()
+    if multiplier <= 0 then return end
     
-    local multiplier = (currentPickupRange - BASE_PICKUP_RANGE) / BASE_PICKUP_RANGE
     local bonusXP = math.floor(baseXP * multiplier + 0.5)
     
     if bonusXP <= 0 then return end
@@ -228,8 +241,8 @@ local function GiveBonusXP()
         levelComponent.AccumulatedXpOnCurrentLevel = newXP
         lastBonusXP = bonusXP
         UpdateXpBoostDisplay()
-        Log(string.format("Base: %d | Range: %.2f | Multiplier: %.2fx | Bonus: %d | Total: %d", 
-            baseXP, currentPickupRange, multiplier, bonusXP, newXP))
+        Log(string.format("Base: %d | Range: %.2f | Ratio: %.2f | Multiplier: %.2fx | Bonus: %d | Total: %d", 
+            baseXP, currentPickupRange, XP_CONVERSION_RATE, multiplier, bonusXP, newXP))
     end
 end
 
@@ -300,7 +313,7 @@ RegisterCustomEvent("OnPlayerGainXP_Event", function(ContextParam, XPAmount)
 end)
 
 ExecuteInGameThread(function()
-    Log(string.format("Mod loaded - Base PickupRange: %.1f", BASE_PICKUP_RANGE))
+    Log(string.format("Mod loaded - Base PickupRange: %.1f | XP ratio: %.2f", BASE_PICKUP_RANGE, XP_CONVERSION_RATE))
     local ok, err = pcall(TryInitMidGame)
     if not ok then Log(string.format("TryInitMidGame error: %s", tostring(err))) end
 end)
@@ -323,9 +336,10 @@ LoopAsync(500, function()
 end)
 
 RegisterConsoleCommandHandler("xpboost_status", function(Cmd, CommandParts, Ar)
-    local bonus = math.floor((currentPickupRange - BASE_PICKUP_RANGE) / BASE_PICKUP_RANGE * 100 + 0.5)
-    Log(string.format("Range: %.2f | Base: %.2f | Bonus: %d%% | Accumulated: %d", 
-        currentPickupRange, BASE_PICKUP_RANGE, bonus, accumulatedBaseXP))
+    local pickupBoost = math.floor(GetPickupRangeBoostMultiplier() * 100 + 0.5)
+    local xpBonus = GetXpBonusPercent()
+    Log(string.format("Range: %.2f | Base: %.2f | Range Boost: %d%% | XP Ratio: %.2f | XP Bonus: %d%% | Accumulated: %d", 
+        currentPickupRange, BASE_PICKUP_RANGE, pickupBoost, XP_CONVERSION_RATE, xpBonus, accumulatedBaseXP))
     return true
 end)
 
@@ -344,6 +358,24 @@ RegisterConsoleCommandHandler("xpboost_set", function(Cmd, CommandParts, Ar)
             Log(string.format("PickupRange set to: %.2f", val))
         end
     end
+    return true
+end)
+
+RegisterConsoleCommandHandler("xpboost_ratio", function(Cmd, CommandParts, Ar)
+    if #CommandParts < 2 then
+        Log(string.format("Usage: xpboost_ratio <value> | Current ratio: %.2f", XP_CONVERSION_RATE))
+        return true
+    end
+
+    local val = tonumber(CommandParts[2])
+    if not val or val < 0 then
+        Log("Invalid ratio. Use a number >= 0.")
+        return true
+    end
+
+    XP_CONVERSION_RATE = val
+    UpdateXpBoostDisplay()
+    Log(string.format("XP conversion ratio set to: %.2f", XP_CONVERSION_RATE))
     return true
 end)
 
