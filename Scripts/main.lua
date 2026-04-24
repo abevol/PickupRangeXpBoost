@@ -16,6 +16,7 @@ local xpBoostTextBlock = nil
 local uiEnabled = true
 local VISIBLE = 4
 local HIDDEN = 2
+local lastUiHealthIssue = nil
 
 local function Log(message)
     print(string.format("[PickupRangeXpBoost] %s\n", message))
@@ -61,6 +62,10 @@ local function IsExpBarVisible()
     return bar and bar:IsValid() and bar:IsVisible()
 end
 
+local function ShouldShowXpBoostUi()
+    return uiEnabled and IsExpBarVisible()
+end
+
 local function GetBonusColor(bonusPercent)
     if bonusPercent <= 0 then
         return FSlateColor(0.6, 0.6, 0.6, 1)
@@ -75,8 +80,77 @@ local function GetBonusColor(bonusPercent)
     end
 end
 
+local function GetXpBoostUiStateSummary()
+    local widgetValid = xpBoostWidget and xpBoostWidget:IsValid() or false
+    local textValid = xpBoostTextBlock and xpBoostTextBlock:IsValid() or false
+    local inViewport = widgetValid and xpBoostWidget:IsInViewport() or false
+    local expBarVisible = IsExpBarVisible()
+    local treeValid = false
+    local rootValid = false
+
+    if widgetValid then
+        local tree = xpBoostWidget.WidgetTree
+        treeValid = tree and tree:IsValid() or false
+        if treeValid then
+            local root = tree.RootWidget
+            rootValid = root and root:IsValid() or false
+        end
+    end
+
+    return string.format(
+        "widget=%s text=%s tree=%s root=%s viewport=%s uiEnabled=%s expBarVisible=%s shouldShow=%s",
+        widgetValid and "valid" or "nil",
+        textValid and "valid" or "nil",
+        treeValid and "valid" or "nil",
+        rootValid and "valid" or "nil",
+        inViewport and "yes" or "no",
+        uiEnabled and "yes" or "no",
+        expBarVisible and "yes" or "no",
+        ShouldShowXpBoostUi() and "yes" or "no"
+    )
+end
+
+local function LogXpBoostUiState(prefix)
+    Log(string.format("%s | %s", prefix, GetXpBoostUiStateSummary()))
+end
+
+local function IsXpBoostWidgetHealthy()
+    if not xpBoostWidget or not xpBoostWidget:IsValid() then
+        return false, "widget_invalid"
+    end
+
+    local tree = xpBoostWidget.WidgetTree
+    if not tree or not tree:IsValid() then
+        return false, "widget_tree_invalid"
+    end
+
+    local root = tree.RootWidget
+    if not root or not root:IsValid() then
+        return false, "root_widget_invalid"
+    end
+
+    if not xpBoostTextBlock or not xpBoostTextBlock:IsValid() then
+        return false, "text_block_invalid"
+    end
+
+    return true, "ok"
+end
+
+local function DestroyXpBoostWidget(reason)
+    if xpBoostWidget and xpBoostWidget:IsValid() then
+        DebugLog(string.format("Destroying XP boost UI (%s)", reason))
+        xpBoostWidget:RemoveFromParent()
+    end
+
+    xpBoostWidget = nil
+    xpBoostTextBlock = nil
+end
+
 local function UpdateXpBoostDisplay()
-    if not xpBoostTextBlock or not xpBoostTextBlock:IsValid() then return end
+    if not xpBoostTextBlock or not xpBoostTextBlock:IsValid() then
+        DebugLog("UpdateXpBoostDisplay skipped: text block is invalid")
+        return
+    end
 
     local bonusPercent = GetXpBonusPercent()
 
@@ -102,27 +176,72 @@ local function CleanupPreviousWidgets()
     end
 end
 
-local function CreateXpBoostWidget()
-    if xpBoostWidget and xpBoostWidget:IsValid() then
+local function CreateXpBoostWidget(reason)
+    local healthy = IsXpBoostWidgetHealthy()
+    if healthy then
         if not xpBoostWidget:IsInViewport() then
+            DebugLog("XP boost UI exists but is not in viewport, re-adding")
             xpBoostWidget:AddToViewport(99)
         end
+        xpBoostWidget:SetVisibility(ShouldShowXpBoostUi() and VISIBLE or HIDDEN)
         UpdateXpBoostDisplay()
-        return
+        return true
     end
+
+    if xpBoostWidget or xpBoostTextBlock then
+        Log(string.format("Rebuilding XP boost UI (%s)", reason or "unknown"))
+        LogXpBoostUiState("XP boost UI state before rebuild")
+    end
+
+    DestroyXpBoostWidget(reason or "recreate")
 
     CleanupPreviousWidgets()
 
     local gi = UEHelpers.GetGameInstance()
-    if not gi or not gi:IsValid() then return end
+    if not gi or not gi:IsValid() then
+        Log("CreateXpBoostWidget aborted: GameInstance is invalid")
+        return false
+    end
 
-    xpBoostWidget = StaticConstructObject(StaticFindObject("/Script/UMG.UserWidget"), gi, FName("XpBoostWidget"))
-    xpBoostWidget.WidgetTree = StaticConstructObject(StaticFindObject("/Script/UMG.WidgetTree"), xpBoostWidget, FName("XpBoostTree"))
+    local userWidgetClass = StaticFindObject("/Script/UMG.UserWidget")
+    local widgetTreeClass = StaticFindObject("/Script/UMG.WidgetTree")
+    local canvasPanelClass = StaticFindObject("/Script/UMG.CanvasPanel")
+    local borderClass = StaticFindObject("/Script/UMG.Border")
+    local textBlockClass = StaticFindObject("/Script/UMG.TextBlock")
 
-    local canvas = StaticConstructObject(StaticFindObject("/Script/UMG.CanvasPanel"), xpBoostWidget.WidgetTree, FName("XpBoostCanvas"))
+    if not userWidgetClass or not widgetTreeClass or not canvasPanelClass or not borderClass or not textBlockClass then
+        Log("CreateXpBoostWidget aborted: failed to resolve one or more UMG classes")
+        return false
+    end
+
+    xpBoostWidget = StaticConstructObject(userWidgetClass, gi, FName("XpBoostWidget"))
+    if not xpBoostWidget or not xpBoostWidget:IsValid() then
+        Log("CreateXpBoostWidget failed: could not construct root widget")
+        DestroyXpBoostWidget("root_construct_failed")
+        return false
+    end
+
+    xpBoostWidget.WidgetTree = StaticConstructObject(widgetTreeClass, xpBoostWidget, FName("XpBoostTree"))
+    if not xpBoostWidget.WidgetTree or not xpBoostWidget.WidgetTree:IsValid() then
+        Log("CreateXpBoostWidget failed: could not construct widget tree")
+        DestroyXpBoostWidget("tree_construct_failed")
+        return false
+    end
+
+    local canvas = StaticConstructObject(canvasPanelClass, xpBoostWidget.WidgetTree, FName("XpBoostCanvas"))
+    if not canvas or not canvas:IsValid() then
+        Log("CreateXpBoostWidget failed: could not construct canvas")
+        DestroyXpBoostWidget("canvas_construct_failed")
+        return false
+    end
     xpBoostWidget.WidgetTree.RootWidget = canvas
 
-    local bg = StaticConstructObject(StaticFindObject("/Script/UMG.Border"), canvas, FName("XpBoostBG"))
+    local bg = StaticConstructObject(borderClass, canvas, FName("XpBoostBG"))
+    if not bg or not bg:IsValid() then
+        Log("CreateXpBoostWidget failed: could not construct border")
+        DestroyXpBoostWidget("border_construct_failed")
+        return false
+    end
     bg:SetBrushColor(FLinearColor(0, 0, 0, 0.75))
     bg:SetPadding({ Left = 8, Top = 3, Right = 8, Bottom = 3 })
 
@@ -132,7 +251,12 @@ local function CreateXpBoostWidget()
     slot:SetAlignment({ X = 0.5, Y = 0 })
     slot:SetPosition({ X = 0, Y = 4 })
 
-    xpBoostTextBlock = StaticConstructObject(StaticFindObject("/Script/UMG.TextBlock"), bg, FName("XpBoostText"))
+    xpBoostTextBlock = StaticConstructObject(textBlockClass, bg, FName("XpBoostText"))
+    if not xpBoostTextBlock or not xpBoostTextBlock:IsValid() then
+        Log("CreateXpBoostWidget failed: could not construct text block")
+        DestroyXpBoostWidget("text_construct_failed")
+        return false
+    end
     xpBoostTextBlock.Font.Size = 16
     xpBoostTextBlock:SetColorAndOpacity(FSlateColor(0.6, 0.6, 0.6, 1))
     xpBoostTextBlock:SetShadowOffset({ X = 1, Y = 1 })
@@ -142,12 +266,72 @@ local function CreateXpBoostWidget()
 
     bg:SetContent(xpBoostTextBlock)
     bg:SetVisibility(VISIBLE)
-    xpBoostWidget:SetVisibility((uiEnabled and IsExpBarVisible()) and VISIBLE or HIDDEN)
+    xpBoostWidget:SetVisibility(ShouldShowXpBoostUi() and VISIBLE or HIDDEN)
     xpBoostWidget:AddToViewport(99)
 
+    if not xpBoostWidget:IsInViewport() then
+        Log("XP boost UI created but is not in viewport yet")
+    end
+
     UpdateXpBoostDisplay()
-    Log("XP boost UI created")
+    lastUiHealthIssue = nil
+    LogXpBoostUiState("XP boost UI created")
+    return true
 end
+
+local function EnsureXpBoostWidget(reason)
+    local healthy, issue = IsXpBoostWidgetHealthy()
+    if not healthy then
+        if lastUiHealthIssue ~= issue then
+            Log(string.format("XP boost UI unhealthy: %s (%s)", issue, reason))
+            LogXpBoostUiState("XP boost UI health check")
+        end
+        lastUiHealthIssue = issue
+        return CreateXpBoostWidget(reason .. ":" .. issue)
+    end
+
+    if lastUiHealthIssue then
+        Log("XP boost UI recovered")
+        lastUiHealthIssue = nil
+    end
+
+    if not xpBoostWidget:IsInViewport() then
+        DebugLog(string.format("XP boost UI missing from viewport, re-adding (%s)", reason))
+        xpBoostWidget:AddToViewport(99)
+        if not xpBoostWidget:IsInViewport() then
+            Log(string.format("XP boost UI still not in viewport after AddToViewport (%s)", reason))
+        end
+    end
+
+    xpBoostWidget:SetVisibility(ShouldShowXpBoostUi() and VISIBLE or HIDDEN)
+    return true
+end
+
+local function ScheduleXpBoostWidgetEnsure(context, initialDelay, maxAttempts, retryDelay)
+    local attempt = 1
+    local function TryEnsure()
+        local ok, ensured = pcall(function()
+            return EnsureXpBoostWidget(string.format("%s attempt %d/%d", context, attempt, maxAttempts))
+        end)
+
+        if not ok then
+            Log(string.format("EnsureXpBoostWidget error: %s", tostring(ensured)))
+        elseif ensured then
+            return
+        end
+
+        if attempt < maxAttempts then
+            attempt = attempt + 1
+            ExecuteWithDelay(retryDelay, TryEnsure)
+        else
+            Log(string.format("XP boost UI ensure timed out after %d attempts (%s)", maxAttempts, context))
+            LogXpBoostUiState("XP boost UI final state")
+        end
+    end
+
+    ExecuteWithDelay(initialDelay, TryEnsure)
+end
+
 
 local function InitializeStatSystem()
     local sys = FindFirstOf("StatSystem")
@@ -262,10 +446,7 @@ local function TryInitMidGame()
     FindLevelComponent()
     UpdatePickupRange()
 
-    ExecuteWithDelay(1000, function()
-        local ok, err = pcall(CreateXpBoostWidget)
-        if not ok then Log(string.format("CreateXpBoostWidget error: %s", tostring(err))) end
-    end)
+    ScheduleXpBoostWidgetEnsure("TryInitMidGame", 1000, 5, 1000)
 end
 
 -- Reset all cached UE references and derived values on level transition.
@@ -274,14 +455,14 @@ end
 -- Rule: every variable that holds a UE object, struct, or value derived from one
 -- MUST be reset here. Add new cached references to this list.
 local function ResetLevelState()
+    DestroyXpBoostWidget("level_reset")
     statSystem = nil
     levelComponent = nil
     pickupRangeTag = nil
-    xpBoostWidget = nil
-    xpBoostTextBlock = nil
     currentPickupRange = BASE_PICKUP_RANGE
     accumulatedBaseXP = 0
     lastBonusXP = 0
+    lastUiHealthIssue = nil
 end
 
 RegisterCustomEvent("OnGameLevelStarted", function(ContextParam)
@@ -289,10 +470,7 @@ RegisterCustomEvent("OnGameLevelStarted", function(ContextParam)
     ResetLevelState()
     InitializeStatSystem()
     UpdatePickupRange()
-    ExecuteWithDelay(2000, function()
-        local ok, err = pcall(CreateXpBoostWidget)
-        if not ok then Log(string.format("CreateXpBoostWidget error: %s", tostring(err))) end
-    end)
+    ScheduleXpBoostWidgetEnsure("OnGameLevelStarted", 2000, 8, 1000)
 end)
 
 RegisterCustomEvent("HandlePickupRangeChanged_", function(ContextParam, StatTag, PrevValue, NewValue)
@@ -322,12 +500,7 @@ LoopAsync(500, function()
     local ok, err = pcall(function()
         UpdatePickupRange()
         GiveBonusXP()
-        if xpBoostWidget and xpBoostWidget:IsValid() then
-            if not xpBoostWidget:IsInViewport() then
-                xpBoostWidget:AddToViewport(99)
-            end
-            xpBoostWidget:SetVisibility((uiEnabled and IsExpBarVisible()) and VISIBLE or HIDDEN)
-        end
+        EnsureXpBoostWidget("LoopAsync")
     end)
     if not ok then
         Log(string.format("LoopAsync error: %s", tostring(err)))
@@ -340,6 +513,7 @@ RegisterConsoleCommandHandler("xpboost_status", function(Cmd, CommandParts, Ar)
     local xpBonus = GetXpBonusPercent()
     Log(string.format("Range: %.2f | Base: %.2f | Range Boost: %d%% | XP Ratio: %.2f | XP Bonus: %d%% | Accumulated: %d", 
         currentPickupRange, BASE_PICKUP_RANGE, pickupBoost, XP_CONVERSION_RATE, xpBonus, accumulatedBaseXP))
+    LogXpBoostUiState("XP boost UI status")
     return true
 end)
 
@@ -388,9 +562,7 @@ end)
 
 RegisterConsoleCommandHandler("xpboost_ui", function(Cmd, CommandParts, Ar)
     uiEnabled = not uiEnabled
-    if xpBoostWidget and xpBoostWidget:IsValid() then
-        xpBoostWidget:SetVisibility((uiEnabled and IsExpBarVisible()) and VISIBLE or HIDDEN)
-    end
+    EnsureXpBoostWidget("xpboost_ui")
     Log(string.format("UI: %s", uiEnabled and "ON" or "OFF"))
     return true
 end)
